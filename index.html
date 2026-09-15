@@ -3,84 +3,129 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard - Asset Management System</title>
+  <title>ICT Service Request Management System</title>
   <link rel="stylesheet" href="css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase.js"></script>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h2>Asset Transaction & Approval Management</h2>
+  <div class="container" style="max-width: 1100px; margin: 20px auto; padding: 0 15px;">
+    <header style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ccc; padding-bottom: 10px;">
+      <h2>ICT Service Request System (Lab 3 + Lab 4)</h2>
       <div>
-        <span id="user-role-display" style="margin-right: 15px; font-weight: bold;">Role: Loading...</span>
-        <button class="btn btn-danger" onclick="handleLogout()">Logout</button>
+        <span id="user-display" style="margin-right: 15px; font-weight: bold;">Loading...</span>
+        <button onclick="handleLogout()" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">Logout</button>
       </div>
     </header>
 
-    <main>
+    <main style="margin-top: 20px;">
+      <!-- Dashboard Summary (Lab 3 Requirement) -->
+      <section style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+        <h3>Service Request Dashboard Summary</h3>
+        <div style="display: flex; gap: 20px; font-size: 16px;">
+          <div>Total Requests: <b id="stat-total">0</b></div>
+          <div>Pending: <b id="stat-pending">0</b></div>
+          <div>In Progress: <b id="stat-progress">0</b></div>
+          <div>Completed: <b id="stat-completed">0</b></div>
+        </div>
+      </section>
+
+      <!-- Request Form (Students/Requesters submit here) -->
+      <section class="requester-only" style="background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+        <h3>Submit New Service Request</h3>
+        <form id="request-form">
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+            <input type="text" id="req-name" placeholder="Requester Name (BR-01)" required>
+            <input type="text" id="req-dept" placeholder="Department (BR-02)" required>
+            <select id="req-category" required>
+              <option value="">-- Select Category (BR-03) --</option>
+              <option value="Computer Repair">Computer Repair</option>
+              <option value="Software Installation">Software Installation</option>
+              <option value="Network Problem">Network Problem</option>
+              <option value="Printer Problem">Printer Problem</option>
+              <option value="Account Access">Account Access</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-bottom: 10px;">
+            <input type="text" id="req-desc" placeholder="Problem Description (BR-04)" required>
+            <select id="req-priority" required>
+              <option value="Low">Low Priority</option>
+              <option value="Medium" selected>Medium Priority</option>
+              <option value="High">High Priority</option>
+            </select>
+          </div>
+          <button type="submit" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Submit Request</button>
+        </form>
+      </section>
+
+      <!-- Search and Filter (Lab 3 Requirement) -->
+      <section style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+        <input type="text" id="search-input" placeholder="Search by name or description..." style="padding: 6px; width: 250px;" oninput="filterRequests()">
+        
+        <label>Status Filter:</label>
+        <select id="filter-status" onchange="filterRequests()" style="padding: 6px;">
+          <option value="All">All</option>
+          <option value="Pending">Pending</option>
+          <option value="Approved">Approved</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Completed">Completed</option>
+          <option value="Rejected">Rejected</option>
+        </select>
+
+        <label>Priority Filter:</label>
+        <select id="filter-priority" onchange="filterRequests()" style="padding: 6px;">
+          <option value="All">All</option>
+          <option value="Low">Low</option>
+          <option value="Medium">Medium</option>
+          <option value="High">High</option>
+        </select>
+      </section>
+
+      <!-- Service Request List Table -->
       <section>
-        <h3>Equipment Inventory</h3>
-        <table>
+        <h3>Service Requests Management Table</h3>
+        <table border="1" cellpadding="8" cellspacing="0" style="width: 100%; text-align: left; border-collapse: collapse;">
           <thead>
-            <tr>
-              <th>ID</th><th>Asset Code</th><th>Name</th><th>Category</th><th>Status</th><th>Action</th>
+            <tr style="background: #eee;">
+              <th>ID</th>
+              <th>Requester</th>
+              <th>Dept</th>
+              <th>Category</th>
+              <th>Description</th>
+              <th>Priority</th>
+              <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
-          <tbody id="equipment-tbody"></tbody>
+          <tbody id="requests-tbody"></tbody>
         </table>
       </section>
 
       <br>
 
-      <section>
-        <h3>My Requests History</h3>
-        <table>
+      <!-- Admin Only: User Profiles List -->
+      <section class="admin-only" style="margin-top: 20px;">
+        <h3>User Profiles Directory (Administrator Only)</h3>
+        <table border="1" cellpadding="8" cellspacing="0" style="width: 100%; border-collapse: collapse;">
           <thead>
-            <tr>
-              <th>Request ID</th><th>Equipment ID</th><th>Status</th><th>Date Created</th>
+            <tr style="background: #eee;">
+              <th>User ID</th><th>Email</th><th>Full Name</th><th>Role</th>
             </tr>
           </thead>
-          <tbody id="my-requests-tbody"></tbody>
+          <tbody id="profiles-tbody"></tbody>
         </table>
       </section>
 
       <br>
 
-      <section class="admin-only">
-        <h3>Pending Approvals (Administrator Only)</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Request ID</th><th>Requester ID</th><th>Equipment ID</th><th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="approvals-tbody"></tbody>
-        </table>
-      </section>
-
-      <br>
-
-      <section class="staff-only">
-        <h3>Active Borrowing Operations (Release / Return)</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Request ID</th><th>Equipment ID</th><th>Status</th><th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="operations-tbody"></tbody>
-        </table>
-      </section>
-
-      <br>
-
-      <section class="admin-only">
+      <!-- Admin Only: Audit Trail Logs (Lab 4 BR-A4-10) -->
+      <section class="admin-only" style="margin-top: 20px;">
         <h3>Audit Trail Logs (BR-A4-10)</h3>
-        <table>
+        <table border="1" cellpadding="8" cellspacing="0" style="width: 100%; border-collapse: collapse;">
           <thead>
-            <tr>
-              <th>Timestamp</th><th>User Name</th><th>Action</th><th>Module</th><th>Description</th>
+            <tr style="background: #eee;">
+              <th>Timestamp</th><th>User</th><th>Action</th><th>Module</th><th>Record ID</th><th>Description</th>
             </tr>
           </thead>
           <tbody id="audit-tbody"></tbody>
