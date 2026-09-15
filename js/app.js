@@ -1,15 +1,17 @@
-let user = null;
+let currentUser = null;
+let allRequests = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
-  user = await checkAuth();
-  if (user) {
-    loadEquipment();
-    loadMyRequests();
-    if (user.role === 'Administrator' || user.role === 'Laboratory Staff') {
-      loadOperations();
+  currentUser = await checkAuth();
+  if (currentUser) {
+    loadRequests();
+    
+    if (currentUser.role === 'Requester') {
+      setupFormListener();
     }
-    if (user.role === 'Administrator') {
-      loadApprovals();
+    
+    if (currentUser.role === 'Administrator') {
+      loadProfiles();
       loadAuditLogs();
     }
   }
@@ -17,8 +19,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function logAudit(action, module, recordId, description) {
   await supabaseClient.from('audit_logs').insert([{
-    user_id: user.id,
-    user_name: user.full_name || user.email,
+    user_id: currentUser.id,
+    user_name: currentUser.full_name || currentUser.email,
     action,
     module,
     record_id: recordId,
@@ -26,197 +28,163 @@ async function logAudit(action, module, recordId, description) {
   }]);
 }
 
-async function loadEquipment() {
-  const { data: items } = await supabaseClient.from('equipment').select('*');
-  const tbody = document.getElementById('equipment-tbody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
+function setupFormListener() {
+  const form = document.getElementById('request-form');
+  if (!form) return;
 
-  (items || []).forEach(item => {
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${item.id}</td>
-      <td>${item.asset_code}</td>
-      <td>${item.name}</td>
-      <td>${item.category}</td>
-      <td><b>${item.status}</b></td>
-      <td>
-        ${item.status === 'Available' 
-          ? `<button class="btn btn-primary" onclick="requestBorrow(${item.id})">Request Borrow</button>` 
-          : '<span style="color: red;">Unavailable</span>'}
-      </td>
-    `;
-    tbody.appendChild(row);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const requester_name = document.getElementById('req-name').value.trim();
+    const department = document.getElementById('req-dept').value.trim();
+    const category = document.getElementById('req-category').value;
+    const description = document.getElementById('req-desc').value.trim();
+    const priority = document.getElementById('req-priority').value;
+
+    // Business Rules BR-01 to BR-05 Validation
+    if (!requester_name || !department || !category || !description) {
+      alert("All fields are required!");
+      return;
+    }
+
+    const { data, error } = await supabaseClient.from('service_requests').insert([{
+      requester_name,
+      department,
+      category,
+      description,
+      priority,
+      status: 'Pending', // BR-06 Default Pending
+      user_id: currentUser.id
+    }]).select();
+
+    if (error) {
+      alert("Error submitting request: " + error.message);
+    } else {
+      await logAudit('SUBMITTED', 'Service Request', data[0].id, `Created request: ${category}`);
+      alert("Request submitted successfully!");
+      form.reset();
+      loadRequests();
+    }
   });
 }
 
-async function requestBorrow(equipmentId) {
-  const { data: item } = await supabaseClient.from('equipment').select('status').eq('id', equipmentId).single();
+async function loadRequests() {
+  const { data, error } = await supabaseClient.from('service_requests').select('*').order('created_at', { ascending: false });
+  if (error) return;
 
-  if (item.status === 'Maintenance') {
-    alert("BR-A4-09: Equipment under Maintenance cannot be borrowed.");
-    return;
-  }
-  if (item.status !== 'Available') {
-    alert("BR-A4-01: Only Available equipment may be requested.");
-    return;
-  }
-
-  const { data, error } = await supabaseClient.from('borrow_requests').insert([{
-    user_id: user.id,
-    equipment_id: equipmentId,
-    status: 'Pending'
-  }]).select();
-
-  if (!error) {
-    await logAudit('SUBMITTED', 'Borrowing', data[0].id, `Submitted request for Equipment ID ${equipmentId}`);
-    alert("Request saved as Pending (BR-A4-02).");
-    loadMyRequests();
-  }
+  allRequests = data || [];
+  updateDashboardStats(allRequests);
+  filterRequests();
 }
 
-async function loadMyRequests() {
-  const { data: requests } = await supabaseClient
-    .from('borrow_requests')
-    .select('*')
-    .eq('user_id', user.id);
+function updateDashboardStats(requests) {
+  document.getElementById('stat-total').textContent = requests.length;
+  document.getElementById('stat-pending').textContent = requests.filter(r => r.status === 'Pending').length;
+  document.getElementById('stat-progress').textContent = requests.filter(r => r.status === 'In Progress').length;
+  document.getElementById('stat-completed').textContent = requests.filter(r => r.status === 'Completed').length;
+}
 
-  const tbody = document.getElementById('my-requests-tbody');
-  if (!tbody) return;
+function filterRequests() {
+  const search = document.getElementById('search-input').value.toLowerCase();
+  const statusFilter = document.getElementById('filter-status').value;
+  const priorityFilter = document.getElementById('filter-priority').value;
+
+  const filtered = allRequests.filter(req => {
+    const matchesSearch = req.requester_name.toLowerCase().includes(search) || req.description.toLowerCase().includes(search);
+    const matchesStatus = statusFilter === 'All' || req.status === statusFilter;
+    const matchesPriority = priorityFilter === 'All' || req.priority === priorityFilter;
+    return matchesSearch && matchesStatus && matchesPriority;
+  });
+
+  renderTable(filtered);
+}
+
+function renderTable(requests) {
+  const tbody = document.getElementById('requests-tbody');
   tbody.innerHTML = '';
 
-  (requests || []).forEach(req => {
+  requests.forEach(req => {
     const row = document.createElement('tr');
+    
+    let actionsHtml = '';
+    if (currentUser.role === 'Administrator') {
+      // Admin Approval Workflow Controls (BR-A4-03)
+      if (req.status === 'Pending') {
+        actionsHtml = `
+          <button onclick="updateStatus(${req.id}, 'Approved')">Approve</button>
+          <button onclick="updateStatus(${req.id}, 'Rejected')">Reject</button>
+        `;
+      } else if (req.status === 'Approved') {
+        actionsHtml = `<button onclick="updateStatus(${req.id}, 'In Progress')">Start Progress</button>`;
+      } else if (req.status === 'In Progress') {
+        actionsHtml = `<button onclick="updateStatus(${req.id}, 'Completed')">Complete</button>`;
+      } else {
+        actionsHtml = `<span>Closed (${req.status})</span>`;
+      }
+      actionsHtml += ` <button onclick="deleteRequest(${req.id})">Delete</button>`;
+    } else {
+      // Student / Requester controls
+      if (req.user_id === currentUser.id && req.status === 'Pending') {
+        actionsHtml = `<button onclick="deleteRequest(${req.id})">Cancel Request</button>`;
+      } else {
+        actionsHtml = `<span>View Only</span>`;
+      }
+    }
+
     row.innerHTML = `
       <td>${req.id}</td>
-      <td>${req.equipment_id}</td>
+      <td>${req.requester_name}</td>
+      <td>${req.department}</td>
+      <td>${req.category}</td>
+      <td>${req.description}</td>
+      <td><b>${req.priority}</b></td>
       <td><b>${req.status}</b></td>
-      <td>${new Date(req.created_at).toLocaleString()}</td>
+      <td>${actionsHtml}</td>
     `;
     tbody.appendChild(row);
   });
 }
 
-async function loadApprovals() {
-  const { data: requests } = await supabaseClient
-    .from('borrow_requests')
-    .select('*')
-    .eq('status', 'Pending');
+async function updateStatus(id, newStatus) {
+  if (currentUser.role !== 'Administrator') {
+    alert("BR-A4-03: Only Administrators can approve/reject requests!");
+    return;
+  }
 
-  const tbody = document.getElementById('approvals-tbody');
+  await supabaseClient.from('service_requests').update({ status: newStatus }).eq('id', id);
+  await logAudit(newStatus.toUpperCase(), 'Service Request', id, `Updated request #${id} status to ${newStatus}`);
+  
+  loadRequests();
+  if (currentUser.role === 'Administrator') loadAuditLogs();
+}
+
+async function deleteRequest(id) {
+  // BR-08 Delete confirmation requirement
+  if (!confirm("BR-08: Are you sure you want to delete this request?")) return;
+
+  await supabaseClient.from('service_requests').delete().eq('id', id);
+  await logAudit('DELETED', 'Service Request', id, `Deleted request #${id}`);
+
+  loadRequests();
+  if (currentUser.role === 'Administrator') loadAuditLogs();
+}
+
+async function loadProfiles() {
+  const { data: profiles } = await supabaseClient.from('profiles').select('*');
+  const tbody = document.getElementById('profiles-tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  (requests || []).forEach(req => {
+  (profiles || []).forEach(prof => {
     const row = document.createElement('tr');
     row.innerHTML = `
-      <td>${req.id}</td>
-      <td>${req.user_id}</td>
-      <td>${req.equipment_id}</td>
-      <td>
-        <button class="btn btn-primary" onclick="processApproval(${req.id}, '${req.user_id}', true)">Approve</button>
-        <button class="btn btn-danger" onclick="processApproval(${req.id}, '${req.user_id}', false)">Reject</button>
-      </td>
+      <td>${prof.id}</td>
+      <td>${prof.email}</td>
+      <td>${prof.full_name || 'N/A'}</td>
+      <td><b>${prof.role}</b></td>
     `;
     tbody.appendChild(row);
   });
-}
-
-async function processApproval(requestId, requesterId, isApproved) {
-  if (user.role !== 'Administrator') {
-    alert("BR-A4-03: Only Administrators may approve or reject requests.");
-    return;
-  }
-
-  if (user.id === requesterId) {
-    alert("BR-A4-02: Staff/Admins cannot approve their own requests.");
-    return;
-  }
-
-  const newStatus = isApproved ? 'Approved' : 'Rejected';
-
-  await supabaseClient.from('borrow_requests').update({ status: newStatus }).eq('id', requestId);
-
-  await logAudit(
-    isApproved ? 'APPROVED' : 'REJECTED',
-    'Borrowing',
-    requestId,
-    `${newStatus} borrowing request #${requestId}`
-  );
-
-  alert(`Request updated to ${newStatus}.`);
-  loadApprovals();
-  if (user.role === 'Administrator' || user.role === 'Laboratory Staff') loadOperations();
-  if (user.role === 'Administrator') loadAuditLogs();
-}
-
-async function loadOperations() {
-  const { data: requests } = await supabaseClient
-    .from('borrow_requests')
-    .select('*')
-    .in('status', ['Approved', 'Released', 'Rejected']);
-
-  const tbody = document.getElementById('operations-tbody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-
-  (requests || []).forEach(req => {
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${req.id}</td>
-      <td>${req.equipment_id}</td>
-      <td><b>${req.status}</b></td>
-      <td>
-        ${req.status === 'Approved' ? `<button class="btn btn-primary" onclick="releaseEquipment(${req.id}, ${req.equipment_id})">Release</button>` : ''}
-        ${req.status === 'Released' ? `
-          <button class="btn btn-primary" onclick="returnEquipment(${req.id}, ${req.equipment_id}, false)">Return (Normal)</button>
-          <button class="btn btn-danger" onclick="returnEquipment(${req.id}, ${req.equipment_id}, true)">Return (Damaged)</button>
-        ` : ''}
-        ${req.status === 'Rejected' ? `<button class="btn btn-secondary" onclick="attemptReleaseRejected()">Attempt Release</button>` : ''}
-      </td>
-    `;
-    tbody.appendChild(row);
-  });
-}
-
-async function releaseEquipment(requestId, equipmentId) {
-  const { data: req } = await supabaseClient.from('borrow_requests').select('status').eq('id', requestId).single();
-
-  if (req.status !== 'Approved') {
-    alert("BR-A4-04 / BR-A4-07: Only Approved requests may be released.");
-    return;
-  }
-
-  await supabaseClient.from('borrow_requests').update({ status: 'Released' }).eq('id', requestId);
-  await supabaseClient.from('equipment').update({ status: 'Borrowed' }).eq('id', equipmentId);
-
-  await logAudit('RELEASED', 'Borrowing', requestId, `Released equipment ID ${equipmentId} (BR-A4-05)`);
-  alert("Equipment successfully released.");
-  loadEquipment();
-  loadOperations();
-}
-
-function attemptReleaseRejected() {
-  alert("BR-A4-07: Rejected requests cannot be released. Operation blocked.");
-}
-
-async function returnEquipment(requestId, equipmentId, isDamaged) {
-  const { data: req } = await supabaseClient.from('borrow_requests').select('status').eq('id', requestId).single();
-
-  if (req.status === 'Returned' || req.status === 'Closed') {
-    alert("BR-A4-08: Returned transactions cannot be processed twice.");
-    return;
-  }
-
-  const newEquipStatus = isDamaged ? 'Maintenance' : 'Available';
-
-  await supabaseClient.from('borrow_requests').update({ status: 'Returned' }).eq('id', requestId);
-  await supabaseClient.from('equipment').update({ status: newEquipStatus }).eq('id', equipmentId);
-
-  await logAudit('RETURNED', 'Borrowing', requestId, `Returned equipment ID ${equipmentId} (BR-A4-06)`);
-  alert("Equipment returned successfully.");
-  loadEquipment();
-  loadOperations();
 }
 
 async function loadAuditLogs() {
@@ -232,6 +200,7 @@ async function loadAuditLogs() {
       <td>${log.user_name}</td>
       <td><b>${log.action}</b></td>
       <td>${log.module}</td>
+      <td>${log.record_id || 'N/A'}</td>
       <td>${log.description}</td>
     `;
     tbody.appendChild(row);
