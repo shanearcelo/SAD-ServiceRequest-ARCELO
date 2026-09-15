@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const email = document.getElementById('login-email').value.trim();
       const password = document.getElementById('login-password').value;
 
-      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
       
       if (error) {
         alert("Login Failed: " + error.message);
@@ -33,23 +33,31 @@ async function checkAuth() {
       .eq('id', session.user.id)
       .single();
 
-    const currentUser = { ...session.user, role: profile?.role || 'Requester', full_name: profile?.full_name || session.user.email };
-    applyRoleInterface(currentUser.role);
+    const currentUser = { 
+      ...session.user, 
+      role: profile?.role || 'Requester', 
+      full_name: profile?.full_name || session.user.email 
+    };
+    
+    applyRoleInterface(currentUser);
     return currentUser;
   }
 }
 
-function applyRoleInterface(role) {
-  const roleDisplay = document.getElementById('user-role-display');
-  if (roleDisplay) roleDisplay.textContent = `Active Role: ${role}`;
+function applyRoleInterface(user) {
+  const userDisplay = document.getElementById('user-display');
+  if (userDisplay) userDisplay.textContent = `User: ${user.full_name} (${user.role})`;
 
-  if (role !== 'Administrator') {
+  if (user.role === 'Administrator') {
+    document.querySelectorAll('.requester-only').forEach(el => el.style.display = 'none');
+  } else {
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
   }
+}
 
-  if (role === 'Requester') {
-    document.querySelectorAll('.staff-only').forEach(el => el.style.display = 'none');
-  }
+async function handleLogout() {
+  await supabaseClient.auth.signOut();
+  window.location.href = 'login.html';
 }
 
 async function handleLogout() {
