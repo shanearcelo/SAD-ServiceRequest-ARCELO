@@ -1,36 +1,17 @@
 document.addEventListener('DOMContentLoaded', () => {
   const loginForm = document.getElementById('login-form');
-  const signupForm = document.getElementById('signup-form');
 
   if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const email = document.getElementById('login-email').value;
+      const email = document.getElementById('login-email').value.trim();
       const password = document.getElementById('login-password').value;
 
       const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-      if (error) alert("Login Error: " + error.message);
-      else window.location.href = 'index.html';
-    });
-  }
-
-  if (signupForm) {
-    signupForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const email = document.getElementById('signup-email').value;
-      const password = document.getElementById('signup-password').value;
-      const fullName = document.getElementById('signup-name').value;
-      const role = document.getElementById('signup-role').value;
-
-      const { data, error } = await supabaseClient.auth.signUp({
-        email,
-        password,
-        options: { data: { full_name: fullName, role: role } }
-      });
-
-      if (error) alert("Registration Error: " + error.message);
-      else {
-        alert("Account registered successfully!");
+      
+      if (error) {
+        alert("Login Failed: " + error.message);
+      } else {
         window.location.href = 'index.html';
       }
     });
@@ -39,7 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function checkAuth() {
   const { data: { session } } = await supabaseClient.auth.getSession();
-  if (!session && !window.location.pathname.includes('login.html')) {
+  
+  if (!session && !window.location.pathname.endsWith('login.html')) {
     window.location.href = 'login.html';
     return null;
   }
@@ -51,7 +33,7 @@ async function checkAuth() {
       .eq('id', session.user.id)
       .single();
 
-    const currentUser = { ...session.user, ...profile };
+    const currentUser = { ...session.user, role: profile?.role || 'Requester', full_name: profile?.full_name || session.user.email };
     applyRoleInterface(currentUser.role);
     return currentUser;
   }

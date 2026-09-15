@@ -29,9 +29,10 @@ async function logAudit(action, module, recordId, description) {
 async function loadEquipment() {
   const { data: items } = await supabaseClient.from('equipment').select('*');
   const tbody = document.getElementById('equipment-tbody');
+  if (!tbody) return;
   tbody.innerHTML = '';
 
-  items.forEach(item => {
+  (items || []).forEach(item => {
     const row = document.createElement('tr');
     row.innerHTML = `
       <td>${item.id}</td>
@@ -41,8 +42,8 @@ async function loadEquipment() {
       <td><b>${item.status}</b></td>
       <td>
         ${item.status === 'Available' 
-          ? `<button onclick="requestBorrow(${item.id})">Request Borrow</button>` 
-          : 'Unavailable'}
+          ? `<button class="btn btn-primary" onclick="requestBorrow(${item.id})">Request Borrow</button>` 
+          : '<span style="color: red;">Unavailable</span>'}
       </td>
     `;
     tbody.appendChild(row);
@@ -69,7 +70,7 @@ async function requestBorrow(equipmentId) {
 
   if (!error) {
     await logAudit('SUBMITTED', 'Borrowing', data[0].id, `Submitted request for Equipment ID ${equipmentId}`);
-    alert("Request saved as Pending.");
+    alert("Request saved as Pending (BR-A4-02).");
     loadMyRequests();
   }
 }
@@ -81,9 +82,10 @@ async function loadMyRequests() {
     .eq('user_id', user.id);
 
   const tbody = document.getElementById('my-requests-tbody');
+  if (!tbody) return;
   tbody.innerHTML = '';
 
-  requests.forEach(req => {
+  (requests || []).forEach(req => {
     const row = document.createElement('tr');
     row.innerHTML = `
       <td>${req.id}</td>
@@ -102,17 +104,18 @@ async function loadApprovals() {
     .eq('status', 'Pending');
 
   const tbody = document.getElementById('approvals-tbody');
+  if (!tbody) return;
   tbody.innerHTML = '';
 
-  requests.forEach(req => {
+  (requests || []).forEach(req => {
     const row = document.createElement('tr');
     row.innerHTML = `
       <td>${req.id}</td>
       <td>${req.user_id}</td>
       <td>${req.equipment_id}</td>
       <td>
-        <button onclick="processApproval(${req.id}, '${req.user_id}', true)">Approve</button>
-        <button onclick="processApproval(${req.id}, '${req.user_id}', false)">Reject</button>
+        <button class="btn btn-primary" onclick="processApproval(${req.id}, '${req.user_id}', true)">Approve</button>
+        <button class="btn btn-danger" onclick="processApproval(${req.id}, '${req.user_id}', false)">Reject</button>
       </td>
     `;
     tbody.appendChild(row);
@@ -141,7 +144,7 @@ async function processApproval(requestId, requesterId, isApproved) {
     `${newStatus} borrowing request #${requestId}`
   );
 
-  alert(`Request status updated to ${newStatus}.`);
+  alert(`Request updated to ${newStatus}.`);
   loadApprovals();
   if (user.role === 'Administrator' || user.role === 'Laboratory Staff') loadOperations();
   if (user.role === 'Administrator') loadAuditLogs();
@@ -154,21 +157,22 @@ async function loadOperations() {
     .in('status', ['Approved', 'Released', 'Rejected']);
 
   const tbody = document.getElementById('operations-tbody');
+  if (!tbody) return;
   tbody.innerHTML = '';
 
-  requests.forEach(req => {
+  (requests || []).forEach(req => {
     const row = document.createElement('tr');
     row.innerHTML = `
       <td>${req.id}</td>
       <td>${req.equipment_id}</td>
       <td><b>${req.status}</b></td>
       <td>
-        ${req.status === 'Approved' ? `<button onclick="releaseEquipment(${req.id}, ${req.equipment_id})">Release</button>` : ''}
+        ${req.status === 'Approved' ? `<button class="btn btn-primary" onclick="releaseEquipment(${req.id}, ${req.equipment_id})">Release</button>` : ''}
         ${req.status === 'Released' ? `
-          <button onclick="returnEquipment(${req.id}, ${req.equipment_id}, false)">Return (Normal)</button>
-          <button onclick="returnEquipment(${req.id}, ${req.equipment_id}, true)">Return (Damaged)</button>
+          <button class="btn btn-primary" onclick="returnEquipment(${req.id}, ${req.equipment_id}, false)">Return (Normal)</button>
+          <button class="btn btn-danger" onclick="returnEquipment(${req.id}, ${req.equipment_id}, true)">Return (Damaged)</button>
         ` : ''}
-        ${req.status === 'Rejected' ? `<button onclick="attemptReleaseRejected()">Attempt Release</button>` : ''}
+        ${req.status === 'Rejected' ? `<button class="btn btn-secondary" onclick="attemptReleaseRejected()">Attempt Release</button>` : ''}
       </td>
     `;
     tbody.appendChild(row);
@@ -186,7 +190,7 @@ async function releaseEquipment(requestId, equipmentId) {
   await supabaseClient.from('borrow_requests').update({ status: 'Released' }).eq('id', requestId);
   await supabaseClient.from('equipment').update({ status: 'Borrowed' }).eq('id', equipmentId);
 
-  await logAudit('RELEASED', 'Borrowing', requestId, `Released equipment ID ${equipmentId}`);
+  await logAudit('RELEASED', 'Borrowing', requestId, `Released equipment ID ${equipmentId} (BR-A4-05)`);
   alert("Equipment successfully released.");
   loadEquipment();
   loadOperations();
@@ -209,7 +213,7 @@ async function returnEquipment(requestId, equipmentId, isDamaged) {
   await supabaseClient.from('borrow_requests').update({ status: 'Returned' }).eq('id', requestId);
   await supabaseClient.from('equipment').update({ status: newEquipStatus }).eq('id', equipmentId);
 
-  await logAudit('RETURNED', 'Borrowing', requestId, `Returned equipment ID ${equipmentId} (Status: ${newEquipStatus})`);
+  await logAudit('RETURNED', 'Borrowing', requestId, `Returned equipment ID ${equipmentId} (BR-A4-06)`);
   alert("Equipment returned successfully.");
   loadEquipment();
   loadOperations();
@@ -218,9 +222,10 @@ async function returnEquipment(requestId, equipmentId, isDamaged) {
 async function loadAuditLogs() {
   const { data: logs } = await supabaseClient.from('audit_logs').select('*').order('created_at', { ascending: false });
   const tbody = document.getElementById('audit-tbody');
+  if (!tbody) return;
   tbody.innerHTML = '';
 
-  logs.forEach(log => {
+  (logs || []).forEach(log => {
     const row = document.createElement('tr');
     row.innerHTML = `
       <td>${new Date(log.created_at).toLocaleString()}</td>

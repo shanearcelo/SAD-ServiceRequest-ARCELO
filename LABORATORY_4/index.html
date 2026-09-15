@@ -3,89 +3,91 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Asset Management - Dashboard</title>
+  <title>Dashboard - Asset Management System</title>
   <link rel="stylesheet" href="css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/supabase.js"></script>
 </head>
 <body>
-  <header>
-    <h2>Asset Transaction & Approval System</h2>
-    <span id="user-role-display">Role: Loading...</span>
-    <button onclick="handleLogout()">Logout</button>
-  </header>
+  <div class="container">
+    <header>
+      <h2>Asset Transaction & Approval Management</h2>
+      <div>
+        <span id="user-role-display" style="margin-right: 15px; font-weight: bold;">Role: Loading...</span>
+        <button class="btn btn-danger" onclick="handleLogout()">Logout</button>
+      </div>
+    </header>
 
-  <hr>
+    <main>
+      <section>
+        <h3>Equipment Inventory</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Asset Code</th><th>Name</th><th>Category</th><th>Status</th><th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="equipment-tbody"></tbody>
+        </table>
+      </section>
 
-  <main>
-    <section>
-      <h3>Equipment Inventory</h3>
-      <table border="1">
-        <thead>
-          <tr>
-            <th>ID</th><th>Asset Code</th><th>Name</th><th>Category</th><th>Status</th><th>Action</th>
-          </tr>
-        </thead>
-        <tbody id="equipment-tbody"></tbody>
-      </table>
-    </section>
+      <br>
 
-    <hr>
+      <section>
+        <h3>My Requests History</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Request ID</th><th>Equipment ID</th><th>Status</th><th>Date Created</th>
+            </tr>
+          </thead>
+          <tbody id="my-requests-tbody"></tbody>
+        </table>
+      </section>
 
-    <section>
-      <h3>My Requests History</h3>
-      <table border="1">
-        <thead>
-          <tr>
-            <th>Request ID</th><th>Equipment ID</th><th>Status</th><th>Date Created</th>
-          </tr>
-        </thead>
-        <tbody id="my-requests-tbody"></tbody>
-      </table>
-    </section>
+      <br>
 
-    <hr>
+      <section class="admin-only">
+        <h3>Pending Approvals (Administrator Only)</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Request ID</th><th>Requester ID</th><th>Equipment ID</th><th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="approvals-tbody"></tbody>
+        </table>
+      </section>
 
-    <section class="admin-only">
-      <h3>Pending Approvals (Administrator Only)</h3>
-      <table border="1">
-        <thead>
-          <tr>
-            <th>Request ID</th><th>Requester ID</th><th>Equipment ID</th><th>Action</th>
-          </tr>
-        </thead>
-        <tbody id="approvals-tbody"></tbody>
-      </table>
-    </section>
+      <br>
 
-    <hr class="staff-only">
+      <section class="staff-only">
+        <h3>Active Borrowing Operations (Release / Return)</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Request ID</th><th>Equipment ID</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="operations-tbody"></tbody>
+        </table>
+      </section>
 
-    <section class="staff-only">
-      <h3>Active Borrowing Operations (Release / Return)</h3>
-      <table border="1">
-        <thead>
-          <tr>
-            <th>Request ID</th><th>Equipment ID</th><th>Status</th><th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="operations-tbody"></tbody>
-      </table>
-    </section>
+      <br>
 
-    <hr class="admin-only">
-
-    <section class="admin-only">
-      <h3>Audit Trail Logs (BR-A4-10)</h3>
-      <table border="1">
-        <thead>
-          <tr>
-            <th>Timestamp</th><th>User Name</th><th>Action</th><th>Module</th><th>Description</th>
-          </tr>
-        </thead>
-        <tbody id="audit-tbody"></tbody>
-      </table>
-    </section>
-  </main>
+      <section class="admin-only">
+        <h3>Audit Trail Logs (BR-A4-10)</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th><th>User Name</th><th>Action</th><th>Module</th><th>Description</th>
+            </tr>
+          </thead>
+          <tbody id="audit-tbody"></tbody>
+        </table>
+      </section>
+    </main>
+  </div>
 
   <script src="js/auth.js"></script>
   <script src="js/app.js"></script>
