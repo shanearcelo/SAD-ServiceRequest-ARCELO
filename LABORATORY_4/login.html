@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Asset Management System</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase.js"></script>
+</head>
+<body>
+  <div class="login-container">
+    <h2>Asset Transaction & Approval Management</h2>
+    
+    <form id="login-form">
+      <h3>Sign In</h3>
+      <input type="email" id="login-email" placeholder="Email Address" required><br><br>
+      <input type="password" id="login-password" placeholder="Password" required><br><br>
+      <button type="submit">Sign In</button>
+    </form>
+
+    <hr>
+
+    <form id="signup-form">
+      <h3>Create Account</h3>
+      <input type="text" id="signup-name" placeholder="Full Name" required><br><br>
+      <input type="email" id="signup-email" placeholder="Email Address" required><br><br>
+      <input type="password" id="signup-password" placeholder="Password" required><br><br>
+      <select id="signup-role" required>
+        <option value="Requester">Requester / Viewer</option>
+        <option value="Laboratory Staff">Laboratory Staff</option>
+        <option value="Administrator">Administrator</option>
+      </select><br><br>
+      <button type="submit">Register</button>
+    </form>
+  </div>
+
+  <script src="js/auth.js"></script>
+</body>
+</html>
