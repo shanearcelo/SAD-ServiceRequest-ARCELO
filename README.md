@@ -26,48 +26,79 @@ This project is an integrated web-based ICT Service Request System built during 
 
 ### Entity-Relationship Diagram (ERD)
 
-+-----------------------------------+        +-----------------------------------+
-|          auth.users               |        |          public.profiles          |
-+-----------------------------------+        +-----------------------------------+
-| id (UUID, PK)                     |<-------| id (UUID, PK, FK -> auth.users)  |
-| email (VARCHAR)                   |        | email (VARCHAR)                   |
-+-----------------------------------+        | full_name (VARCHAR)               |
-| role (VARCHAR: Admin/Requester)   |
-+-----------------------------------+
-|
-| 1:N
-v
-+-----------------------------------+        +-----------------------------------+
-|       public.audit_logs           |        |     public.service_requests       |
-+-----------------------------------+        +-----------------------------------+
-| id (UUID, PK)                     |        | id (UUID, PK)                     |
-| request_id (UUID, FK)             |        | user_id (UUID, FK -> profiles)    |
-| performed_by (UUID, FK)           |<-------| requester_name (VARCHAR)          |
-| action (VARCHAR)                  |        | department (VARCHAR)              |
-| previous_status (VARCHAR)         |        | category (VARCHAR)                |
-| new_status (VARCHAR)              |        | description (TEXT)                |
-| timestamp (TIMESTAMPTZ)           |        | priority (Low/Med/High)           |
-+-----------------------------------+        | status (Pending/Approved/etc)     |
-+-----------------------------------+
+```mermaid
+erDiagram
+    auth_users ||--o| profiles : "has profile"
+    profiles ||--o{ service_requests : "submits"
+    profiles ||--o{ audit_logs : "performs action"
+    service_requests ||--o{ audit_logs : "tracks changes"
+
+    auth_users {
+        uuid id PK
+        string email
+        string encrypted_password
+        timestamp created_at
+    }
+
+    profiles {
+        uuid id PK, FK
+        string email
+        string full_name
+        string role "Administrator | Requester"
+        timestamp created_at
+    }
+
+    service_requests {
+        uuid id PK
+        uuid user_id FK
+        string requester_name
+        string department
+        string category
+        text description
+        string priority "Low | Medium | High"
+        string status "Pending | In Progress | Approved | Rejected"
+        timestamp created_at
+    }
+
+    audit_logs {
+        uuid id PK
+        uuid request_id FK
+        uuid performed_by FK
+        string action
+        string previous_status
+        string new_status
+        timestamp timestamp
+    }
+```
 
 ### Use Case Diagram
 
-+----------------------------------+
-                 |    ICT Service Request System    |
-                 +----------------------------------+
-                 |                                  |
- (Requester) ----|---> (Sign In / Authenticate)     |<--- (Administrator)
-      |          |                                  |          |
-      |----------|---> (Submit Service Request)     |          |
-      |----------|---> (View Own Request History)   |          |
-                 |                                  |          |
-                 |---> (Manage / Filter Requests)   |<---------|
-                 |---> (Approve / Reject Requests)  |<---------|
-                 |---> (View Audit Logs)            |<---------|
-                 |                                  |
-                 +----------------------------------+
-                 
----
+```mermaid
+graph LR
+    subgraph System ["ICT Service Request System"]
+        UC1(("Sign In / Authenticate"))
+        UC2(("Submit Service Request"))
+        UC3(("View Personal Request History"))
+        UC4(("View All System Requests"))
+        UC5(("Filter & Search Requests"))
+        UC6(("Update Request Status"))
+        UC7(("View Audit Logs"))
+    end
+
+    Requester["👤 Requester (Student/Staff)"]
+    Admin["🛠️ Administrator"]
+
+    Requester --> UC1
+    Requester --> UC2
+    Requester --> UC3
+    Requester --> UC5
+
+    Admin --> UC1
+    Admin --> UC4
+    Admin --> UC5
+    Admin --> UC6
+    Admin --> UC7
+```
 
 ## Role-Permission Matrix
 
@@ -84,21 +115,42 @@ v
 ---
 
 ## Workflow Diagram
-[Requester]                     [System Database]                 [Administrator]
-|                                  |                                |
-|--- 1. Submit New Request ------->|                                |
-|    (Status: Pending)             |                                |
-|                                  |--- 2. Load Requests ----------->|
-|                                  |                                |
-|                                  |<-- 3. Update Status -----------|
-|                                  |    (In Progress / Approved)    |
-|                                  |                                |
-|                                  |--- 4. Write Audit Log -------->|
-|                                  |    (Action Recorded)           |
-v                                  v                                v
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Requester as 👤 Requester (Student)
+    participant System as 💻 Web Interface
+    participant Auth as 🔐 Supabase Auth
+    participant DB as 🗄️ Database (PostgreSQL)
+    actor Admin as 🛠️ Administrator
 
----
+    %% Authentication Phase
+    Requester->>System: Enter credentials & Submit Login
+    System->>Auth: Authenticate User
+    Auth-->>System: Return Auth Session Token
+    System->>DB: Fetch Role from public.profiles
+    DB-->>System: Return Role ('Requester')
+    System-->>Requester: Load Requester Portal (Form Visible)
 
+    %% Request Submission Phase
+    Requester->>System: Fill & Submit Service Request Form
+    System->>DB: INSERT into public.service_requests (Status: 'Pending')
+    DB-->>System: Return Created Record
+    System-->>Requester: Display Success & Update Table
+
+    %% Admin Review Phase
+    Admin->>System: Log in & Access Admin Dashboard
+    System->>DB: SELECT * FROM public.service_requests
+    DB-->>System: Return All System Requests
+    System-->>Admin: Display Management Table with Action Controls
+
+    %% Approval & Audit Phase
+    Admin->>System: Click 'Approve' or 'Reject' on Request
+    System->>DB: UPDATE service_requests SET status = 'Approved'
+    System->>DB: INSERT into public.audit_logs (action, status_change, timestamp)
+    DB-->>System: Confirm Update & Log Creation
+    System-->>Admin: Refresh Table & Show Status Updated
+```
 ## Business Rules
 
 1. **Authentication Rule:** Users must be authenticated via Supabase Auth to access any dashboard functionality. Unauthenticated users are redirected to `login.html`.
